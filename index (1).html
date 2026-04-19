@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Vehicle Inspection</title>
+
+  <style>
+    body {
+      display: flex;
+      font-family: Arial;
+      margin: 0;
+    }
+
+    #sidebar {
+      width: 250px;
+      background: #1e1e1e;
+      color: white;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    #sidebar div {
+      padding: 15px;
+      cursor: pointer;
+      border-bottom: 1px solid #333;
+    }
+
+    #sidebar div:hover {
+      background: #333;
+    }
+
+    #main {
+      flex: 1;
+      padding: 20px;
+    }
+
+    .item {
+      border-bottom: 1px solid #ccc;
+      padding: 10px 0;
+    }
+
+    .controls {
+      display: flex;
+      gap: 15px;
+      margin-top: 5px;
+    }
+
+    textarea {
+      width: 100%;
+      margin-top: 5px;
+    }
+
+    .tire-box {
+      display: flex;
+      gap: 10px;
+      margin-top: 5px;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 15px;
+      font-size: 16px;
+    }
+
+    #finalReport {
+      display: none;
+      padding: 20px;
+    }
+
+    /* ✅ UPDATED PRINT CSS */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+
+      #finalReport, #finalReport * {
+        visibility: visible;
+      }
+
+      #finalReport {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        font-size: 12pt;
+        font-family: Arial;
+      }
+
+      h1 {
+        text-align: center;
+      }
+
+      h2 {
+        margin-top: 20px;
+        border-bottom: 2px solid black;
+        padding-bottom: 5px;
+      }
+
+      #finalReport > div {
+        page-break-inside: avoid;
+        margin-bottom: 15px;
+      }
+
+      #finalReport div div {
+        margin-left: 10px;
+        margin-bottom: 5px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="sidebar"></div>
+
+<div id="main">
+  <h2 id="categoryTitle"></h2>
+  <div id="items"></div>
+
+  <button onclick="finalizeInspection()">Inspection Finalized</button>
+</div>
+
+<div id="finalReport"></div>
+
+<script>
+const data = [
+  { category: "Interior & General", items: ["Owners Card & Insurance","VIN","Glazing","Doors","Wipers","Mirrors","Seat","Seatbelt","Flooring","Horn","Defroster"] },
+  { category: "Under Hood", items: ["Battery","Master Cylinder","Firewall","Motor Mounts"] },
+  { category: "Body", items: ["Bumpers","Body","Fuel Cap","License Plate"] },
+  { category: "Lighting", items: ["Lights"] },
+  { category: "Wheels & Tires", items: [{ name: "Tires", hasTires: true },{ name: "Wheels" }] },
+  { category: "Suspension / Steering", items: ["Suspension","Steering"] },
+  { category: "Brakes", items: [{ name: "Brakes", hasTires: true },"Brake Pedal","Parking Brake"] },
+  { category: "Fuel / Exhaust", items: ["Fuel","Exhaust"] },
+  { category: "Frame", items: ["Frame"] },
+  { category: "Emissions", items: ["Emission Control System"] },
+  { category: "Road Test", items: ["Parking Brake (Road)","Automatic Transmission","Stopping Distance","Speedometer","Odometer","Forward & Reverse","Questionable Behavior"] }
+];
+
+const state = {};
+
+function initState() {
+  data.forEach(cat => {
+    state[cat.category] = {};
+    cat.items.forEach(itemObj => {
+      const name = typeof itemObj === "string" ? itemObj : itemObj.name;
+      const hasTires = itemObj.hasTires || false;
+
+      state[cat.category][name] = {
+        pass: false,
+        fail: false,
+        notes: "",
+        tires: hasTires ? { LF:false, RF:false, LR:false, RR:false } : null
+      };
+    });
+  });
+}
+
+const sidebar = document.getElementById("sidebar");
+const itemsDiv = document.getElementById("items");
+const title = document.getElementById("categoryTitle");
+
+data.forEach((cat, index) => {
+  const div = document.createElement("div");
+  div.innerText = cat.category;
+  div.onclick = () => loadCategory(index);
+  sidebar.appendChild(div);
+});
+
+function loadCategory(index) {
+  const cat = data[index];
+  title.innerText = cat.category;
+  itemsDiv.innerHTML = "";
+
+  // ✅ ADD mileage inputs ONLY for Road Test
+  if (cat.category === "Road Test") {
+    itemsDiv.innerHTML += `
+      <div style="margin-bottom:15px;">
+        Old Mileage: <input id="oldMileage" type="number"><br><br>
+        New Mileage: <input id="newMileage" type="number">
+      </div>
+    `;
+  }
+
+  cat.items.forEach(itemObj => {
+    const name = typeof itemObj === "string" ? itemObj : itemObj.name;
+    const hasTires = itemObj.hasTires || false;
+    const item = state[cat.category][name];
+
+    const row = document.createElement("div");
+    row.className = "item";
+
+    row.innerHTML = `
+      <strong>${name}</strong>
+      <div class="controls">
+        <label>Pass <input type="checkbox" ${item.pass ? "checked" : ""}></label>
+        <label>Fail <input type="checkbox" ${item.fail ? "checked" : ""}></label>
+      </div>
+      ${hasTires ? `
+        <div class="tire-box">
+          LF <input type="checkbox" ${item.tires.LF ? "checked" : ""}>
+          RF <input type="checkbox" ${item.tires.RF ? "checked" : ""}>
+          LR <input type="checkbox" ${item.tires.LR ? "checked" : ""}>
+          RR <input type="checkbox" ${item.tires.RR ? "checked" : ""}>
+        </div>` : ""}
+      <textarea placeholder="Notes...">${item.notes}</textarea>
+    `;
+
+    const inputs = row.querySelectorAll("input");
+    const textarea = row.querySelector("textarea");
+
+    inputs.forEach((input, i) => {
+      input.addEventListener("change", () => {
+        if (i === 0) item.pass = input.checked;
+        if (i === 1) item.fail = input.checked;
+
+        if (hasTires) {
+          const keys = ["LF","RF","LR","RR"];
+          if (i >= 2) item.tires[keys[i-2]] = input.checked;
+        }
+      });
+    });
+
+    textarea.addEventListener("input", () => {
+      item.notes = textarea.value;
+    });
+
+    itemsDiv.appendChild(row);
+  });
+}
+
+/* ✅ UPDATED REPORT FUNCTION */
+function buildFinalReport() {
+  const report = document.getElementById("finalReport");
+  report.innerHTML = "<h1>Inspection Report</h1>";
+
+  Object.keys(state).forEach(category => {
+    const catDiv = document.createElement("div");
+
+    const header = document.createElement("h2");
+    header.innerText = category;
+    catDiv.appendChild(header);
+
+    // ✅ Only show mileage in Road Test
+    if (category === "Road Test") {
+      const oldMileage = document.getElementById("oldMileage")?.value || "";
+      const newMileage = document.getElementById("newMileage")?.value || "";
+
+      const mileageLine = document.createElement("div");
+      mileageLine.innerText = `Old Mileage: ${oldMileage} | New Mileage: ${newMileage}`;
+      catDiv.appendChild(mileageLine);
+    }
+
+    Object.keys(state[category]).forEach(item => {
+      const itemData = state[category][item];
+
+      let tireText = "";
+      if (itemData.tires) {
+        tireText = ` | Tires: LF(${itemData.tires.LF}) RF(${itemData.tires.RF}) LR(${itemData.tires.LR}) RR(${itemData.tires.RR})`;
+      }
+
+      const line = document.createElement("div");
+
+      line.innerText =
+        `${item} → Pass: ${itemData.pass ? "YES" : "NO"} | Fail: ${itemData.fail ? "YES" : "NO"}${tireText} | Notes: ${itemData.notes || "None"}`;
+
+      catDiv.appendChild(line);
+    });
+
+    report.appendChild(catDiv);
+  });
+}
+
+function finalizeInspection() {
+  buildFinalReport();
+  window.print();
+}
+
+initState();
+loadCategory(0);
+</script>
+
+</body>
+</html>
