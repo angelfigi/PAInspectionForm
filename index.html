@@ -3,6 +3,8 @@
 <head>
   <title>Vehicle Inspection</title>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
   <style>
     body {
       display: flex;
@@ -62,48 +64,40 @@
     }
 
     #finalReport {
-      display: none;
+      display: block;
       padding: 20px;
+      background: white;
+      color: black;
     }
 
-    /* ✅ UPDATED PRINT CSS */
-    @media print {
-      body * {
-        visibility: hidden;
-      }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
 
-      #finalReport, #finalReport * {
-        visibility: visible;
-      }
+    th, td {
+      border: 1px solid black;
+      padding: 6px;
+      font-size: 11pt;
+    }
 
-      #finalReport {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        font-size: 12pt;
-        font-family: Arial;
-      }
+    th {
+      background: #eee;
+    }
 
-      h1 {
-        text-align: center;
-      }
+    .fail {
+      background: #f8d7da;
+    }
 
-      h2 {
-        margin-top: 20px;
-        border-bottom: 2px solid black;
-        padding-bottom: 5px;
-      }
+    .header-box {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
 
-      #finalReport > div {
-        page-break-inside: avoid;
-        margin-bottom: 15px;
-      }
-
-      #finalReport div div {
-        margin-left: 10px;
-        margin-bottom: 5px;
-      }
+    .signature {
+      margin-top: 40px;
     }
   </style>
 </head>
@@ -116,25 +110,13 @@
   <h2 id="categoryTitle"></h2>
   <div id="items"></div>
 
-  <button onclick="finalizeInspection()">Inspection Finalized</button>
+  <button onclick="finalizeInspection()">Save as PDF</button>
 </div>
 
 <div id="finalReport"></div>
 
 <script>
-const data = [
-  { category: "Interior & General", items: ["Owners Card & Insurance","VIN","Glazing","Doors","Wipers","Mirrors","Seat","Seatbelt","Flooring","Horn","Defroster"] },
-  { category: "Under Hood", items: ["Battery","Master Cylinder","Firewall","Motor Mounts"] },
-  { category: "Body", items: ["Bumpers","Body","Fuel Cap","License Plate"] },
-  { category: "Lighting", items: ["Lights"] },
-  { category: "Wheels & Tires", items: [{ name: "Tires", hasTires: true },{ name: "Wheels" }] },
-  { category: "Suspension / Steering", items: ["Suspension","Steering"] },
-  { category: "Brakes", items: [{ name: "Brakes", hasTires: true },"Brake Pedal","Parking Brake"] },
-  { category: "Fuel / Exhaust", items: ["Fuel","Exhaust"] },
-  { category: "Frame", items: ["Frame"] },
-  { category: "Emissions", items: ["Emission Control System"] },
-  { category: "Road Test", items: ["Parking Brake (Road)","Automatic Transmission","Stopping Distance","Speedometer","Odometer","Forward & Reverse","Questionable Behavior"] }
-];
+const data = [/* SAME DATA AS YOURS */];
 
 const state = {};
 
@@ -171,13 +153,13 @@ function loadCategory(index) {
   title.innerText = cat.category;
   itemsDiv.innerHTML = "";
 
-  // ✅ ADD mileage inputs ONLY for Road Test
   if (cat.category === "Road Test") {
     itemsDiv.innerHTML += `
-      <div style="margin-bottom:15px;">
-        Old Mileage: <input id="oldMileage" type="number"><br><br>
-        New Mileage: <input id="newMileage" type="number">
-      </div>
+      VIN: <input id="vin"><br><br>
+      Plate: <input id="plate"><br><br>
+      Tech: <input id="tech"><br><br>
+      Old Mileage: <input id="oldMileage" type="number"><br><br>
+      New Mileage: <input id="newMileage" type="number"><br><br>
     `;
   }
 
@@ -213,9 +195,9 @@ function loadCategory(index) {
         if (i === 0) item.pass = input.checked;
         if (i === 1) item.fail = input.checked;
 
-        if (hasTires) {
+        if (hasTires && i >= 2) {
           const keys = ["LF","RF","LR","RR"];
-          if (i >= 2) item.tires[keys[i-2]] = input.checked;
+          item.tires[keys[i-2]] = input.checked;
         }
       });
     });
@@ -228,51 +210,94 @@ function loadCategory(index) {
   });
 }
 
-/* ✅ UPDATED REPORT FUNCTION */
 function buildFinalReport() {
   const report = document.getElementById("finalReport");
-  report.innerHTML = "<h1>Inspection Report</h1>";
+
+  const vin = document.getElementById("vin")?.value || "";
+  const plate = document.getElementById("plate")?.value || "";
+  const tech = document.getElementById("tech")?.value || "";
+  const oldMileage = document.getElementById("oldMileage")?.value || "";
+  const newMileage = document.getElementById("newMileage")?.value || "";
+
+  report.innerHTML = `
+    <h1>Vehicle Inspection Report</h1>
+
+    <div class="header-box">
+      <div>
+        <strong>VIN:</strong> ${vin}<br>
+        <strong>Plate:</strong> ${plate}
+      </div>
+      <div>
+        <strong>Technician:</strong> ${tech}<br>
+        <strong>Date:</strong> ${new Date().toLocaleDateString()}
+      </div>
+    </div>
+
+    <div>
+      <strong>Old Mileage:</strong> ${oldMileage} |
+      <strong>New Mileage:</strong> ${newMileage}
+    </div>
+  `;
 
   Object.keys(state).forEach(category => {
     const catDiv = document.createElement("div");
+    catDiv.innerHTML = `<h2>${category}</h2>`;
 
-    const header = document.createElement("h2");
-    header.innerText = category;
-    catDiv.appendChild(header);
-
-    // ✅ Only show mileage in Road Test
-    if (category === "Road Test") {
-      const oldMileage = document.getElementById("oldMileage")?.value || "";
-      const newMileage = document.getElementById("newMileage")?.value || "";
-
-      const mileageLine = document.createElement("div");
-      mileageLine.innerText = `Old Mileage: ${oldMileage} | New Mileage: ${newMileage}`;
-      catDiv.appendChild(mileageLine);
-    }
+    const table = document.createElement("table");
+    table.innerHTML = `
+      <tr>
+        <th>Item</th>
+        <th>Pass</th>
+        <th>Fail</th>
+        <th>Tires</th>
+        <th>Notes</th>
+      </tr>
+    `;
 
     Object.keys(state[category]).forEach(item => {
-      const itemData = state[category][item];
+      const i = state[category][item];
 
       let tireText = "";
-      if (itemData.tires) {
-        tireText = ` | Tires: LF(${itemData.tires.LF}) RF(${itemData.tires.RF}) LR(${itemData.tires.LR}) RR(${itemData.tires.RR})`;
+      if (i.tires) {
+        tireText = `LF:${i.tires.LF?"✔":""} RF:${i.tires.RF?"✔":""} LR:${i.tires.LR?"✔":""} RR:${i.tires.RR?"✔":""}`;
       }
 
-      const line = document.createElement("div");
+      const row = document.createElement("tr");
+      if (i.fail) row.classList.add("fail");
 
-      line.innerText =
-        `${item} → Pass: ${itemData.pass ? "YES" : "NO"} | Fail: ${itemData.fail ? "YES" : "NO"}${tireText} | Notes: ${itemData.notes || "None"}`;
+      row.innerHTML = `
+        <td>${item}</td>
+        <td>${i.pass ? "✔" : ""}</td>
+        <td>${i.fail ? "✔" : ""}</td>
+        <td>${tireText}</td>
+        <td>${i.notes || ""}</td>
+      `;
 
-      catDiv.appendChild(line);
+      table.appendChild(row);
     });
 
+    catDiv.appendChild(table);
     report.appendChild(catDiv);
   });
+
+  report.innerHTML += `
+    <div class="signature">
+      Technician Signature: ___________________________
+    </div>
+  `;
 }
 
 function finalizeInspection() {
   buildFinalReport();
-  window.print();
+
+  const element = document.getElementById("finalReport");
+
+  html2pdf().set({
+    margin: 0.5,
+    filename: 'inspection_report.pdf',
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+  }).from(element).save();
 }
 
 initState();
